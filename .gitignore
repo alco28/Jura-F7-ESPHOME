@@ -1,5 +1,7 @@
 # .gitignore for ESPHome, Home Assistant, and Visual Studio Code
 
+*.tmp
+
 # ESPHome
 /build/
 *.pyc
