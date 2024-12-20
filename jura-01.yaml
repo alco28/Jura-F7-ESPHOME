@@ -1,4 +1,4 @@
-#https://community.home-assistant.io/t/control-your-jura-coffee-machine/26604
+
 
 substitutions:
   devicename: jura
@@ -9,22 +9,20 @@ substitutions:
   dallas_sampling_period: 30s
   samples: '4'
   decimals: '2'
-  uart_tx_pin: D1 # UART TX-pin als variabele toegevoegd voor betere onderhoudbaarheid
-  uart_rx_pin: D2 # UART RX-pin als variabele toegevoegd voor betere onderhoudbaarheid
-  uart_baud_rate: "9600" # Baudrate verplaatst naar substituties
-  poll_interval: "30s" # Custom component polling interval als variabele toegevoegd
+  uart_tx_pin: GPIO17  # Updated for ESP32 WROOM
+  uart_rx_pin: GPIO16  # Updated for ESP32 WROOM
+  uart_baud_rate: "9600"
+  poll_interval: "30s"
 
-  
 esphome:
   name: $devicename
   comment: ${device_description}
-  platform: ESP8266
-  board: d1_mini
+  platform: ESP32
+  board: esp32dev
   platformio_options:
     upload_speed: 115200
   includes:
     - jura_coffee.h
-  esp8266_restore_from_flash: True
   name_add_mac_suffix: false
 
 wifi:
@@ -34,9 +32,9 @@ wifi:
 
   # Optional manual IP
   # manual_ip:
-  #   static_ip: 192.168.1.1
-  #   gateway: 192.168.1.1
-  #   subnet: 255.255.255.0
+  #   static_ip: *.*.1.1
+  #   gateway: *.*.1.1
+  #   subnet: *.*.*.*
     
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
@@ -80,17 +78,17 @@ api:
 
 web_server:
   port: 80
-  version: 2
-  # sorting_groups:
-  #   - id: sorting_group_jura_settings
-  #     name: "Jura Settings"
-  #     sorting_weight: 10
-  #   - id: sorting_group_counters
-  #     name: "Counters"
-  #     sorting_weight: 30  
-  #   - id: Coffee_products_menu
-  #     name: "Coffee products menu"
-  #     sorting_weight: 20  
+  version: 3
+  sorting_groups:
+    - id: sorting_group_jura_settings
+      name: "Jura Settings"
+      sorting_weight: 10
+    - id: sorting_group_counters
+      name: "Counters"
+      sorting_weight: 30  
+    - id: Coffee_products_menu
+      name: "Coffee products menu"
+      sorting_weight: 20  
 
 status_led:
   # Wemos uses GPIO2 for the built in LED
@@ -109,10 +107,7 @@ one_wire:
   - platform: gpio
     pin: D5
 
-# Enable time component to reset  at midnight
-#time:
- # - platform: sntp
- #   id: my_time  
+
 
 
 globals:
@@ -138,7 +133,7 @@ script:
           id(num_coffee).publish_state(id(single_coffee_made_counter));   
              
 interval:
-  - interval: 24h  # Elke 24 uur
+  - interval: 24h  
     then:
       - script.execute: reset_coffee_made_counter
 
@@ -220,8 +215,8 @@ button:
   - platform: restart
     name: "${devicename} Jura ESP restart"
     entity_category: config 
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings    
+    web_server:
+      sorting_group_id: sorting_group_jura_settings    
  # - platform: template
   #  name: "Toggle Log Level"
    #  then:
@@ -233,8 +228,8 @@ button:
     icon: "mdi:restart"
     on_press:
       - script.execute: reset_coffee_made_counter
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings    
+    web_server:
+      sorting_group_id: sorting_group_jura_settings    
 
 
   - platform: template
@@ -265,8 +260,8 @@ button:
     name: 'jura_menu_ENTER'
     icon: "mdi:keyboard-return"
     id: jura_FA04
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings        
+    web_server:
+      sorting_group_id: sorting_group_jura_settings        
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -286,8 +281,8 @@ button:
     name: 'jura_menu_CCW'
     icon: "mdi:menu-left-outline"
     id: jura_FA05
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings        
+    web_server:
+      sorting_group_id: sorting_group_jura_settings        
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -307,8 +302,8 @@ button:
     name: 'jura_menu_CW'
     icon: "mdi:menu-right-outline"
     id: jura_FA06
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings        
+    web_server:
+      sorting_group_id: sorting_group_jura_settings        
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -330,8 +325,8 @@ button:
     name: 'Make Risoretto'
     icon: "mdi:coffee-outline"
     id: jura_FA07
-    # web_server:
-    #   sorting_group_id: Coffee_products_menu 
+    web_server:
+      sorting_group_id: Coffee_products_menu 
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -351,8 +346,8 @@ button:
     name: 'Make Espresso'
     icon: "mdi:coffee-to-go-outline"
     id: jura_FA08
-    # web_server:
-    #   sorting_group_id: Coffee_products_menu 
+    web_server:
+      sorting_group_id: Coffee_products_menu 
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -372,8 +367,8 @@ button:
     name: 'Make Coffee'
     icon: "mdi:coffee-outline"
     id: jura_FA09
-    # web_server:
-    #   sorting_group_id: Coffee_products_menu 
+    web_server:
+      sorting_group_id: Coffee_products_menu 
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -393,8 +388,8 @@ button:
     name: 'Make Cappuccino'
     icon: "mdi:glass-mug-variant"
     id: jura_FA0A
-    # web_server:
-    #   sorting_group_id: Coffee_products_menu 
+    web_server:
+      sorting_group_id: Coffee_products_menu 
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -414,8 +409,8 @@ button:
     name: 'Make Steam'
     icon: "mdi:pot-steam-outline" 
     id: jura_FA0B
-    # web_server:
-    #   sorting_group_id: Coffee_products_menu 
+    web_server:
+      sorting_group_id: Coffee_products_menu 
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -435,8 +430,8 @@ button:
     name: 'Make hot-water'
     icon: "mdi:tea-outline"
     id: jura_FA0C
-    # web_server:
-    #   sorting_group_id: Coffee_products_menu 
+    web_server:
+      sorting_group_id: Coffee_products_menu 
     on_press:
       - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
       - delay: 8ms
@@ -455,8 +450,8 @@ button:
   # - platform: template
     # name: 'Type'
     # id: jura_TY
-    #web_server:
-     # sorting_group_id: Coffee_products_menu 
+    web_server:
+     sorting_group_id: Coffee_products_menu 
     # on_press:
       # - uart.write: [0xDB, 0xDF, 0xDF, 0xDF]  ## 'T'
       # - delay: 8ms
@@ -478,8 +473,8 @@ sensor:
 
   - platform: dallas_temp   
     id: temperature1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
     address: 0xd901186dcfabff28 
     name: "room temperature"    
     device_class: "temperature"
@@ -517,8 +512,8 @@ sensor:
     filters: 
       - filter_out: nan   
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: num_double_espresso
@@ -529,8 +524,8 @@ sensor:
     filters: 
       - filter_out: nan   
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
       
 
   - platform: template
@@ -545,8 +540,8 @@ sensor:
       - lambda: |-
           id(single_coffee_made_counter) += x;         
           return x;
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
       
 
       
@@ -559,8 +554,8 @@ sensor:
     filters: 
       - filter_out: nan   
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: num_clean
@@ -571,8 +566,8 @@ sensor:
     filters: 
       - filter_out: nan   
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: num_ristretto
@@ -583,8 +578,8 @@ sensor:
     filters:
       - filter_out: nan
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: num_double_ristretto
@@ -595,8 +590,8 @@ sensor:
     filters:
       - filter_out: nan
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: num_brewunit_movements
@@ -606,8 +601,8 @@ sensor:
     filters:
       - filter_out: nan
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: num_coffee_Grounds 
@@ -625,8 +620,8 @@ sensor:
             return NAN;  // Blokkeer waarden groter dan 20
           }
           return x;
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: template
     id: sensor_coffee_counter 
@@ -638,8 +633,8 @@ sensor:
     filters: 
       - filter_out: nan   
       - skip_initial: 1
-    # web_server:
-    #   sorting_group_id: sorting_group_counters 
+    web_server:
+      sorting_group_id: sorting_group_counters 
 
   - platform: debug
     free:
@@ -686,15 +681,15 @@ text_sensor:
     id: tray_status
     name: "Tray Status"
     lambda: "return {};"
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings     
+    web_server:
+      sorting_group_id: sorting_group_jura_settings     
     
   - platform: template
     id: tank_status
     name: "Water Tank Status"
     lambda: "return {};"
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings 
+    web_server:
+      sorting_group_id: sorting_group_jura_settings 
   
   - platform: debug
     device:
