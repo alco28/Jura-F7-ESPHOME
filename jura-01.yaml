@@ -17,16 +17,25 @@ substitutions:
 esphome:
   name: $devicename
   comment: ${device_description}
-  platform: ESP8266
-  board: d1_mini
-  platformio_options:
-    upload_speed: 115200
-  includes:
-    - jura_coffee.h
-  esp8266_restore_from_flash: True
   name_add_mac_suffix: false
 
-globals:
+#  external_components:
+ #   - source: custom_components
+  includes:
+    - custom_components/jura_coffee/jura_coffee.h
+
+external_components:
+  - source:
+      type: local
+      path: custom_components/jura_coffee
+
+esp8266:
+  board: d1_mini
+  framework:
+    version: recommended
+  restore_from_flash: true
+
+#globals:
 
 wifi:
   ssid: !secret wifi_ssid
@@ -41,10 +50,10 @@ wifi:
     
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
-    ssid: “${friendly_name} Fallback AP"
+    ssid: "${friendly_name} Fallback AP"
     password: !secret fallback_ap_password
 
-captive_portal:
+#captive_portal:
 
 logger: # set to wan to reduce SRAM logging errors
   level: WARN
@@ -70,7 +79,7 @@ api:
 
 web_server:
   port: 80
-  version: 2
+  #version: 2
   # sorting_groups:
   #   - id: sorting_group_jura_settings
   #     name: "Jura Settings"
@@ -89,7 +98,7 @@ status_led:
   
   pin:
     number: D4 # Wemos uses GPIO2 for the built in LED
-    inverted: True
+    inverted: true
 
 uart:
   tx_pin: ${uart_tx_pin} 
@@ -104,22 +113,7 @@ one_wire:
     pin: D5
 ##############################################################################
 
-script:
-  - id: reset_coffee_made_counter
-    then:
-      - lambda: |-
-          id(single_coffee_made_counter) = 0;
-          id(num_coffee).publish_state(id(single_coffee_made_counter));
 
-  - id: publish_states
-    then:
-      - lambda: |-
-          id(num_coffee).publish_state(id(single_coffee_made_counter));   
-             
-interval:
-  - interval: 24h  
-    then:
-      - script.execute: reset_coffee_made_counter
 
 
 ################# CONTROL JURA FROM ESPHOME #################################################################
@@ -145,39 +139,40 @@ switch:
     name: 'Coffee Machine'
     icon: "mdi:coffee-maker"
     id: jura_on_off_switch
+    optimistic: true
+    assumed_state: true
+    restore_mode: DISABLED  # Replaces restore_state: false
     # web_server:
       # sorting_group_id: sorting_group_jura_settings    
     turn_on_action:
-      - uart.write: [0xDF, 0xDB, 0xDB, 0xDF]  ## 'A'
+      - uart.write: [0xDF, 0xDB, 0xDB, 0xDF]  ## 'A' - Power toggle
       - delay: 8ms
-      - uart.write: [0xFB, 0xFF, 0xDB, 0xDF]  ## 'N'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xFF, 0xDB]  ## ':'
-      - delay: 8ms
-      - uart.write: [0xDB, 0xDB, 0xFF, 0xDB]  ## '0'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xDB, 0xFF, 0xDB]  ## '1'
+      - uart.write: [0xFB, 0xFF, 0xDB, 0xDF]  ## 'N' - On command
       - delay: 8ms
       - uart.write: [0xDF, 0xFF, 0xDB, 0xDB]  ## '\r'
       - delay: 8ms
       - uart.write: [0xFB, 0xFB, 0xDB, 0xDB]  ## '\n'
-
     turn_off_action:
-      - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xDB, 0xDB, 0xDF]  ## 'A'
-      - delay: 8ms
-      - uart.write: [0xFB, 0xFB, 0xFF, 0xDB]  ## ':'
-      - delay: 8ms
-      - uart.write: [0xDB, 0xDB, 0xFF, 0xDB]  ## '0'
-      - delay: 8ms
-      - uart.write: [0xDF, 0xDB, 0xFF, 0xDB]  ## '1'
+      - uart.write: [0xFB, 0xDF, 0xDB, 0xDF]  ## 'F' - Off command
       - delay: 8ms
       - uart.write: [0xDF, 0xFF, 0xDB, 0xDB]  ## '\r'
       - delay: 8ms
       - uart.write: [0xFB, 0xFB, 0xDB, 0xDB]  ## '\n'
+  
+  - platform: template
+    name: "${friendly_name} Debug Mode"
+    id: jura_debug_mode
+    icon: "mdi:bug"
     optimistic: true
-    assumed_state: true
+    restore_mode: DISABLED  # Replaces restore_state: false
+    turn_on_action:
+      - logger.set_level:
+          level: VERY_VERBOSE
+          tag: "jura_coffee"
+    turn_off_action:
+      - logger.set_level:
+          level: INFO
+          tag: "jura_coffee"
 
 
 
@@ -190,13 +185,6 @@ button:
     # web_server:
     #   sorting_group_id: sorting_group_jura_settings    
 
-  - platform: template
-    name: "reset coffe made counter"
-    icon: "mdi:restart"
-    on_press:
-      - script.execute: reset_coffee_made_counter
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings    
 
 
   - platform: template
@@ -489,7 +477,7 @@ sensor:
     name: "Single Espressos Made"
     accuracy_decimals: 0
     state_class: total_increasing
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters: 
       - filter_out: nan   
       - skip_initial: 1
@@ -501,7 +489,7 @@ sensor:
     name: "Double Espressos Made"
     accuracy_decimals: 0
     state_class: total_increasing
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters: 
       - filter_out: nan   
       - skip_initial: 1
@@ -514,13 +502,11 @@ sensor:
     name: "Single Coffees Made"
     accuracy_decimals: 0
     state_class: total_increasing
-    lambda: "return {};"  
+    lambda: "return NAN;"  
     filters: 
       - filter_out: nan    
       - skip_initial: 1 
-      - lambda: |-
-          id(single_coffee_made_counter) += x;         
-          return x;
+
     # web_server:
     #   sorting_group_id: sorting_group_counters  
 
@@ -530,7 +516,7 @@ sensor:
     name: "Double Coffees Made"
     accuracy_decimals: 0
     state_class: total_increasing    
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters: 
       - filter_out: nan   
       - skip_initial: 1
@@ -542,7 +528,7 @@ sensor:
     name: "Single Ristretto Made"
     state_class: total_increasing   
     accuracy_decimals: 0
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters:
       - filter_out: nan
       - skip_initial: 1
@@ -554,7 +540,7 @@ sensor:
     name: "Double Ristretto Made"
     state_class: total_increasing   
     accuracy_decimals: 0
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters:
       - filter_out: nan
       - skip_initial: 1
@@ -566,7 +552,7 @@ sensor:
     name: "Single Capuccino Made"
     state_class: total_increasing   
     accuracy_decimals: 0
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters:
       - filter_out: nan
       - skip_initial: 1
@@ -579,7 +565,7 @@ sensor:
     name: "Cleanings Performed"
     state_class: total_increasing   
     accuracy_decimals: 0
-    lambda: "return {};"
+    lambda: "return NAN;"
     filters: 
       - filter_out: nan   
       - skip_initial: 1
@@ -590,7 +576,7 @@ sensor:
     id: num_brewunit_movements
     name: "Brewunit motor movements"
     accuracy_decimals: 0
-    lambda: "return {};" 
+    lambda: "return NAN;" 
     filters:
       - filter_out: nan
       - skip_initial: 1
@@ -601,7 +587,7 @@ sensor:
     id: num_descaling
     name: "Descalings Performed"
     accuracy_decimals: 0
-    lambda: "return {};" 
+    lambda: "return NAN;" 
     filters:
       - filter_out: nan
       - skip_initial: 1
@@ -626,13 +612,18 @@ sensor:
     # web_server:
     #   sorting_group_id: sorting_group_counters 
 
-#-------- text sensors for diagnostic purposes ---------------------
+jura_coffee:
+  id: jura_coffee_1
+  uart_id: uart_bus
+  debug_switch: jura_debug_mode
+
+#-------- Jura coffee machine configuration ----------------------
 text_sensor:
+  # System diagnostic sensors
   - platform: version
     name: "${friendly_name} ESPHome version"
     internal: true
     entity_category: diagnostic
-
 
   - platform: wifi_info
     ip_address:
@@ -641,68 +632,70 @@ text_sensor:
       icon: mdi:ip-network
       internal: true
       entity_category: diagnostic
-          
     ssid:
       name: Netwerk
       id: netwerk
       icon: mdi:access-point-network
       internal: true
       entity_category: diagnostic
-
     mac_address:
       name: Mac-adres
       id: mac_adres
       icon: mdi:folder-key-network-outline 
       internal: true
       entity_category: diagnostic
-  # - platform: debug
-  #   device:
-  #     name: "Device Info"
-  #   reset_reason:
-  #     name: "Reset Reason"  
 
-#---------------------- Jura coffee machine tray and water status ----------------------
+  # Jura coffee machine status sensors
   - platform: template
     id: tray_status
     name: "Tray Status"
-    lambda: "return {};"
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings     
+    icon: "mdi:tray"
+    entity_category: diagnostic
     
   - platform: template
     id: tank_status
     name: "Water Tank Status"
-    lambda: "return {};"
-    # web_server:
-    #   sorting_group_id: sorting_group_jura_settings 
+    icon: "mdi:water"
+    entity_category: diagnostic
   
 
+# Status sensors
 binary_sensor:
   - platform: status
     name: "${friendly_name} Status"
+    icon: "mdi:coffee-maker"
     entity_category: diagnostic
 
-#------------------custom componente for Jura Coffee decoding ----------------------
+  - platform: template
+    name: "${friendly_name} UART Active"
+    id: uart_active
+    device_class: connectivity
+    entity_category: diagnostic
 
-# The order of sensors must align with the order in the JuraCoffee constructor @ jura_coffee.h
-custom_component:
-  - id: jura_coffee
-    lambda: !lambda |-
-      auto my_jura = new JuraCoffee(
-          id(uart_bus),
-          id(num_single_espresso),
-          id(num_double_espresso),
-          id(num_coffee),
-          id(num_double_coffee),
-          id(num_ristretto),
-          id(num_single_capuccino),
-          id(num_double_ristretto),        
-          id(num_brewunit_movements),
-          id(num_clean),
-          id(num_descaling),
-          id(num_coffee_Grounds),
-          id(tray_status),          
-          id(tank_status)
-      );
-      return {my_jura};
+#------------------custom component for Jura Coffee decoding ----------------------
+
+
+
+
+# # The order of sensors must align with the order in the JuraCoffee constructor @ jura_coffee.h
+# custom_component:
+#   - id: jura_coffee
+#     lambda: !lambda |-
+#       auto my_jura = new JuraCoffee(
+#           id(uart_bus),
+#           id(num_single_espresso),
+#           id(num_double_espresso),
+#           id(num_coffee),
+#           id(num_double_coffee),
+#           id(num_ristretto),
+#           id(num_single_capuccino),
+#           id(num_double_ristretto),        
+#           id(num_brewunit_movements),
+#           id(num_clean),
+#           id(num_descaling),
+#           id(num_coffee_Grounds),
+#           id(tray_status),          
+#           id(tank_status)
+#       );
+#       return {my_jura};
 
