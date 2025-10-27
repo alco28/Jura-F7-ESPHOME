@@ -1,10 +1,10 @@
 #include "esphome.h"
-#include <array>  // foor std::array
+#include <array>  // for std::array
 
 class JuraCoffee : public PollingComponent, public UARTDevice {
  private:
   std::array<Sensor *, 11> sensors;  // Number of sensors
-  std::array<TextSensor *, 2> text_sensors; // Number of texsensors
+  std::array<TextSensor *, 2> text_sensors; // Number of text sensors
   std::array<long, 11> counts;   // Number of sensors
   std::string tray_status, tank_status;
 
@@ -175,11 +175,11 @@ bool processEEPROMData(const std::string &data) {
     return true;
   }
 
-  // Publiceer data to sensors
+  // Publish data to sensors
   void publishSensorData() {
-    for (int i = 0; i < 11; i++) { // actual count[i] replace it when needed
-      if (sensors[i] != nullptr) {
-        sensors[i]->publish_state(counts[i]);
+    for (auto sensor : sensors) {
+      if (sensor != nullptr) {
+        sensor->publish_state(counts[&sensor - &sensors[0]]); // Index calculation
       }
     }
 
