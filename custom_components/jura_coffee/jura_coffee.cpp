@@ -1,33 +1,44 @@
 #include "jura_coffee.h"
 
+// ========================
+// Jura Coffee Custom Component
+// Handles communication, parsing, and publishing for Jura coffee machines
+// ========================
+
+
 namespace esphome {
 namespace jura_coffee {
+
+// ========================
+// Command Definitions
+// ========================
 
 const std::string JuraCoffee::CMD_EEPROM = "RT:0000";
 const std::string JuraCoffee::CMD_IC = "IC:";
 
+
+// Called once after UART is initialized by ESPHome
 void JuraCoffee::setup() {
   // Setup runs after UART is initialized by ESPHome
 }
 
+// Main loop: handles polling and update intervals
 void JuraCoffee::loop() {
   static uint32_t last_update = 0;
   const uint32_t now = millis();
-  
-  // Only update every UPDATE_INTERVAL_MS to prevent unnecessary UART traffic
-  if ((now - last_update) < UPDATE_INTERVAL_MS) {
+
+  // Use shorter interval if debug mode is enabled
+  uint32_t interval = is_debug_enabled() ? 10000 : UPDATE_INTERVAL_MS;
+
+  if ((now - last_update) < interval) {
     return;
   }
   last_update = now;
-  
-  // If UART is not available, skip this update
-  if (!available()) {
-    return;
-  }
-  
+
   update();
 }
 
+// Called on each update interval to fetch and process data
 void JuraCoffee::update() {
   static uint32_t consecutive_failures = 0;
   
@@ -57,6 +68,8 @@ void JuraCoffee::update() {
 // The rest of your fetchData(), parseHexSubstring(), processEEPROMData(), processICData(), and publishSensorData()
 // functions go here, unchanged from your original implementation.
 
+
+// Send a single byte over UART with required delay
 void JuraCoffee::send_uart_byte(uint8_t byte) {
   this->write(byte);
   delay(UART_BYTE_DELAY_MS);
@@ -66,6 +79,7 @@ uint8_t JuraCoffee::receive_uart_byte() {
   return this->read();
 }
 
+// Wait for a complete response from the Jura machine over UART
 bool JuraCoffee::wait_for_response(std::string &response) {
   uint32_t timeout = 0;
   char inbyte = 0;
@@ -97,8 +111,12 @@ bool JuraCoffee::wait_for_response(std::string &response) {
   return true;
 }
 
+// Send a command and fetch the response from the Jura machine
 std::string JuraCoffee::fetchData(const std::string &command) {
+
   int timeout = 0;
+  // Set debug_mode_ based on debug switch
+  debug_mode_ = is_debug_enabled();
 
   if (debug_mode_) {
     ESP_LOGI(TAG, "Sending command: %s", command.c_str());
@@ -170,11 +188,13 @@ std::string JuraCoffee::fetchData(const std::string &command) {
 
   std::string result = inbytes.substr(0, inbytes.length() - 2);
   if (debug_mode_) {
+    ESP_LOGI(TAG, "Raw response: %s", inbytes.c_str());
     ESP_LOGI(TAG, "Received response: %s", result.c_str());
   }
   return result;
 }
 
+// Parse a substring as a hexadecimal number
 long JuraCoffee::parseHexSubstring(const std::string &data, int start, int end) {
   if (end > (int)data.length() || start < 0 || start >= end) {
     ESP_LOGE("jura_coffee", "Invalid substring range: start=%d, end=%d", start, end);
@@ -188,6 +208,7 @@ long JuraCoffee::parseHexSubstring(const std::string &data, int start, int end) 
   return strtol(substring.c_str(), NULL, 16);
 }
 
+// Check if a string is a valid hexadecimal number
 bool JuraCoffee::isHexadecimal(const std::string &str) {
   for (char c : str) {
     if (!isxdigit((unsigned char)c)) return false;
@@ -195,26 +216,28 @@ bool JuraCoffee::isHexadecimal(const std::string &str) {
   return true;
 }
 
+// Parse EEPROM data and extract counter values
 bool JuraCoffee::processEEPROMData(const std::string &data) {
   if (data.empty()) return false;
 
-  // Known fields
+  // Only parse counters that fit in the response (up to 43 for 10 counters)
   counts[0] = parseHexSubstring(data, 3, 7);   // Single espresso
   counts[1] = parseHexSubstring(data, 7, 11);  // Double espresso
   counts[2] = parseHexSubstring(data, 11, 15); // Single Coffee
   counts[3] = parseHexSubstring(data, 15, 19); // Double coffee
-  counts[4] = parseHexSubstring(data, 19, 23); // Single Ristretto  
+  counts[4] = parseHexSubstring(data, 19, 23); // Single Ristretto
   counts[5] = parseHexSubstring(data, 23, 27); // Single Capuccino
-  counts[6] = parseHexSubstring(data, 27, 31); // Double Ristretto   
+  counts[6] = parseHexSubstring(data, 27, 31); // Double Ristretto
   counts[7] = parseHexSubstring(data, 31, 35); // Brew-unit movements
   counts[8] = parseHexSubstring(data, 35, 39); // Cleanings
-  counts[9] = parseHexSubstring(data, 39, 43); // descaling counter
-
-  counts[10] = parseHexSubstring(data, 59, 63); // num of coffee grounds due to cleaning 
+  counts[9] = parseHexSubstring(data, 39, 43); // Descalings
+  // Only parse more if the string is long enough!
+  // counts[10] = parseHexSubstring(data, 59, 63); // num of coffee grounds due to cleaning (skip if not present)
 
   return true;
 }
 
+// Parse IC data and extract tray/tank status
 bool JuraCoffee::processICData(const std::string &data) {
   if (data.empty()) return false;
 
@@ -228,8 +251,10 @@ bool JuraCoffee::processICData(const std::string &data) {
   return true;
 }
 
+// Publish parsed sensor and text sensor values to ESPHome
 void JuraCoffee::publishSensorData() {
-  for (int i = 0; i < 11; i++) { // actual count[i] replace it when needed
+  // Only publish the 10 valid counters (0-9)
+  for (int i = 0; i < 10; i++) {
     if (sensors[i] != nullptr) {
       sensors[i]->publish_state(counts[i]);
     }

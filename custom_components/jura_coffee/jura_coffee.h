@@ -17,7 +17,7 @@ using namespace esphome::uart;
 using namespace esphome::switch_;
 
 static const char *const TAG = "jura_coffee";
-static const uint32_t UPDATE_INTERVAL_MS = 30000;
+static const uint32_t UPDATE_INTERVAL_MS = 10000;
 static const uint32_t UART_TIMEOUT_MS = 1500;
 static const uint8_t UART_BYTE_DELAY_MS = 8;
 static const uint8_t UART_READ_DELAY_MS = 10;
@@ -25,12 +25,29 @@ static const uint8_t SENSOR_COUNT = 11;
 static const uint8_t TEXT_SENSOR_COUNT = 2;
 
 class JuraCoffee : public Component, public UARTDevice {
+ public:
+  void set_num_single_espresso(esphome::sensor::Sensor *s) { sensors[0] = s; }
+  void set_num_double_espresso(esphome::sensor::Sensor *s) { sensors[1] = s; }
+  void set_num_coffee(esphome::sensor::Sensor *s) { sensors[2] = s; }
+  void set_num_double_coffee(esphome::sensor::Sensor *s) { sensors[3] = s; }
+  void set_num_ristretto(esphome::sensor::Sensor *s) { sensors[4] = s; }
+  void set_num_single_capuccino(esphome::sensor::Sensor *s) { sensors[5] = s; }
+  void set_num_double_ristretto(esphome::sensor::Sensor *s) { sensors[6] = s; }
+  void set_num_brewunit_movements(esphome::sensor::Sensor *s) { sensors[7] = s; }
+  void set_num_clean(esphome::sensor::Sensor *s) { sensors[8] = s; }
+  void set_num_descaling(esphome::sensor::Sensor *s) { sensors[9] = s; }
+  void set_num_coffee_Grounds(esphome::sensor::Sensor *s) { sensors[10] = s; }
+  void set_tray_status(esphome::text_sensor::TextSensor *s) { text_sensors[0] = s; }
+  void set_tank_status(esphome::text_sensor::TextSensor *s) { text_sensors[1] = s; }
  private:
   std::array<Sensor *, SENSOR_COUNT> sensors{};  // Initialize to nullptr
   std::array<TextSensor *, TEXT_SENSOR_COUNT> text_sensors{};  // Initialize to nullptr
   Switch *debug_switch_{nullptr};
   std::array<long, SENSOR_COUNT> counts{};
   std::string tray_status, tank_status;
+
+  // Debug mode flag
+  bool debug_mode_ = false;
 
   static const std::string CMD_EEPROM;
   static const std::string CMD_IC;
